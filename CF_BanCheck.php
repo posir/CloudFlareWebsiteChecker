@@ -58,18 +58,29 @@ if (!isset($accounts['success']) || !$accounts['success'] || empty($accounts['re
 $account_id = $accounts['result'][0]['id'];
 echo "Process Account ID: $account_id\n";
 
-// 获取Zone列表
-$ch = curl_init("https://api.cloudflare.com/client/v4/zones?account.id=$account_id");
-curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-$response = curl_exec($ch);
-curl_close($ch);
-$zones = json_decode($response, true);
+// 获取Zone列表（支持分页，获取所有域名）
+$zones_result = [];
+$page = 1;
+$per_page = 50;
+do {
+    $ch = curl_init("https://api.cloudflare.com/client/v4/zones?account.id=$account_id&page=$page&per_page=$per_page");
+    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    $response = curl_exec($ch);
+    curl_close($ch);
+    $zones = json_decode($response, true);
+    if (isset($zones['success']) && $zones['success'] === true && !empty($zones['result'])) {
+        $zones_result = array_merge($zones_result, $zones['result']);
+        $page++;
+    } else {
+        break;
+    }
+} while (isset($zones['result_info']) && $zones['result_info']['total_count'] > count($zones_result));
 
 printf("%-36s %-30s %-16s %-8s\n", 'ZoneID', 'Domain', 'Target IP', 'IP Status');
 
-if (isset($zones['success']) && $zones['success'] === true) {
-    foreach ($zones['result'] as $zone) {
+if (!empty($zones_result)) {
+    foreach ($zones_result as $zone) {
         $zone_id = $zone['id'];
         $zone_name = $zone['name'];
         $domain_to_check = $zone_name;
